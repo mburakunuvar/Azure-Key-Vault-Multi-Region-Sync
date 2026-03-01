@@ -22,9 +22,8 @@ All commands are in [README.md](README.md).
 
 ## Step 0 — Environment Variables
 
-- [ ] Open a terminal session you will keep open for the entire walkthrough
-- [ ] Set `SUBSCRIPTION_ID` and run `az account set`
-- [ ] Set all resource group, location, Key Vault, AKS, ACR, and identity variables
+- [ ] Edit `env.sh` — set your real `SUBSCRIPTION_ID`
+- [ ] `source env.sh` and run `az account set --subscription "$SUBSCRIPTION_ID"`
 - [ ] Confirm no variable is empty: `echo "$SOURCE_KV $TARGET_KV $AKS_NAME"`
 
 ---
@@ -71,42 +70,55 @@ All commands are in [README.md](README.md).
 
 ## Step 5 — Managed Identity and Federated Credential
 
-- [ ] Create the User-Assigned Managed Identity (`id-akvsync`)
-- [ ] Capture `CLIENT_ID` and `PRINCIPAL_ID` into variables
-- [ ] Verify: `echo "$CLIENT_ID"` and `echo "$PRINCIPAL_ID"` — both should be non-empty GUIDs
-- [ ] Create the federated identity credential linking:
-  - [ ] The AKS OIDC issuer (`$OIDC_ISSUER`)
-  - [ ] The Kubernetes subject `system:serviceaccount:akv-sync:akv-sync-sa`
-  - [ ] Audience `api://AzureADTokenExchange`
-- [ ] Verify: `az identity federated-credential list --identity-name "$IDENTITY_NAME" --resource-group "$IDENTITY_RG" --output table`
+- [x] Create the User-Assigned Managed Identity (`id-akvsync`)
+- [x] Capture `CLIENT_ID` and `PRINCIPAL_ID` into variables
+- [x] Verify: `echo "$CLIENT_ID"` and `echo "$PRINCIPAL_ID"` — both should be non-empty GUIDs
+- [x] Create the federated identity credential linking:
+  - [x] The AKS OIDC issuer (`$OIDC_ISSUER`)
+  - [x] The Kubernetes subject `system:serviceaccount:akv-sync:akv-sync-sa`
+  - [x] Audience `api://AzureADTokenExchange`
+- [x] Verify: `az identity federated-credential list --identity-name "$IDENTITY_NAME" --resource-group "$IDENTITY_RG" --output table`
 
 ---
 
 ## Step 6 — RBAC Assignments
 
-- [ ] Capture `SOURCE_KV_ID` and `TARGET_KV_ID` into variables
-- [ ] Assign **Key Vault Secrets User** to the identity on the **source** vault (read-only)
-- [ ] Assign **Key Vault Secrets Officer** to the identity on the **target** vault (write)
-- [ ] Verify both assignments: `az role assignment list --assignee "$PRINCIPAL_ID" --output table`
-- [ ] Confirm there is **no write role** on the source vault for this identity
+- [x] Capture `SOURCE_KV_ID` and `TARGET_KV_ID` into variables
+- [x] Assign **Key Vault Secrets User** to the identity on the **source** vault (read-only)
+- [x] Assign **Key Vault Secrets Officer** to the identity on the **target** vault (write)
+- [x] Verify both assignments: `az role assignment list --assignee "$PRINCIPAL_ID" --output table`
+- [x] Confirm there is **no write role** on the source vault for this identity
 
 ---
 
-## Step 7 — Build and Push the Sync Container Image
+## Step 7 — Run the Sync Script Locally *(optional but recommended)*
+
+> Validate the sync logic with your own Azure CLI credentials before building any container.
 
 - [ ] Clone the sync app: `git clone https://github.com/mburakunuvar/akv-sync.git`
 - [ ] Change into the `akv-sync` directory
+- [ ] Inspect the code — understand what env vars or config it expects
+- [ ] Set required env vars (`SOURCE_VAULT_URL`, `TARGET_VAULT_URL`) pointing at the real vaults
+- [ ] Run the script locally (e.g. `python main.py` or `go run .`) using your `az login` credentials
+- [ ] Verify all 3 secrets appear in the target vault: `az keyvault secret list --vault-name "$TARGET_KV" --output table`
+- [ ] Confirm the values match the source vault
+
+---
+
+## Step 8 — Build and Push the Sync Container Image
+
+- [ ] Build the Docker image locally: `docker build -t akv-sync:local .`
+- [ ] (Optional) Run the container locally to validate it behaves identically to the raw script
 - [ ] Create the Azure Container Registry (`acrakvsync` — must be globally unique)
 - [ ] Log in to ACR: `az acr login --name "$ACR_NAME"`
 - [ ] Capture `ACR_LOGIN_SERVER` into a variable
-- [ ] Build the Docker image: `docker build -t "${ACR_LOGIN_SERVER}/akv-sync:latest" .`
-- [ ] Push the image: `docker push "${ACR_LOGIN_SERVER}/akv-sync:latest"`
+- [ ] Tag and push the image: `docker push "${ACR_LOGIN_SERVER}/akv-sync:latest"`
 - [ ] Attach ACR to AKS: `az aks update --attach-acr "$ACR_NAME"`
 - [ ] Verify image is in registry: `az acr repository list --name "$ACR_NAME" --output table`
 
 ---
 
-## Step 8 — Deploy to AKS
+## Step 9 — Deploy to AKS
 
 - [ ] Capture `TENANT_ID` into a variable: `export TENANT_ID=$(az account show --query tenantId -o tsv)`
 - [ ] Create `namespace.yaml` with the `akv-sync` namespace definition
@@ -125,7 +137,7 @@ All commands are in [README.md](README.md).
 
 ---
 
-## Step 9 — Validate the Sync
+## Step 10 — Validate the Sync
 
 - [ ] Trigger a manual job run: `kubectl create job akv-sync-manual-run --from=cronjob/akv-sync --namespace akv-sync`
 - [ ] Watch the pod reach `Completed` state: `kubectl get pods -n akv-sync --watch`

@@ -62,38 +62,20 @@ az provider register --namespace Microsoft.ContainerRegistry
 
 ## Step 0 — Define Environment Variables
 
-Set these once. Every command in this guide uses them.
+All variables are collected in [`env.sh`](env.sh) at the root of this repository. Edit the file to set your `SUBSCRIPTION_ID`, then source it at the start of every terminal session:
 
 ```bash
-# Subscription
-export SUBSCRIPTION_ID="<your-subscription-id>"
+# 1. Set your subscription ID in env.sh, then:
+source env.sh
 az account set --subscription "$SUBSCRIPTION_ID"
+```
 
-# Resource groups
-export RG_SOURCE="rg-akv-sync-source"
-export RG_TARGET="rg-akv-sync-target"
+`env.sh` is `.gitignore`d so your real subscription ID and resource names are never committed. Variables that depend on already-deployed resources (`OIDC_ISSUER`, `CLIENT_ID`, `PRINCIPAL_ID`, `SOURCE_KV_ID`, `TARGET_KV_ID`, `ACR_LOGIN_SERVER`, `TENANT_ID`) are populated automatically via `az` queries when you source the file — they silently return empty before those resources exist, and populate correctly once they do.
 
-# Regions
-export LOCATION_SOURCE="westeurope"
-export LOCATION_TARGET="swedencentral"
+Re-source the file in any new terminal to restore the full environment:
 
-# Key Vaults
-export SOURCE_KV="kv-akvsync-source"
-export TARGET_KV="kv-akvsync-target-dr"
-
-# AKS (runs in the source region; can be in either)
-export AKS_RG="rg-akv-sync-aks"
-export AKS_LOCATION="westeurope"
-export AKS_NAME="aks-akvsync"
-
-# Container registry
-export ACR_NAME="acrakvsync"             # must be globally unique, alphanumeric only
-
-# Workload Identity
-export IDENTITY_RG="rg-akv-sync-aks"
-export IDENTITY_NAME="id-akvsync"
-export NAMESPACE="akv-sync"
-export SA_NAME="akv-sync-sa"
+```bash
+source env.sh
 ```
 
 ---
@@ -125,14 +107,14 @@ az keyvault create \
 
 Grant yourself the **Key Vault Secrets Officer** role so you can populate demo secrets:
 
-```bash
-export MY_OBJECT_ID=$(az ad signed-in-user show --query id -o tsv)
+> `MY_OBJECT_ID` is pre-populated by `env.sh`. If it is empty, re-run `source env.sh`.
 
+```bash
 az role assignment create \
   --role "Key Vault Secrets Officer" \
   --assignee-object-id "$MY_OBJECT_ID" \
   --assignee-principal-type User \
-  --scope "$(az keyvault show --name $SOURCE_KV --query id -o tsv)"
+  --scope "$(az keyvault show --name "$SOURCE_KV" --query id -o tsv)"
 ```
 
 Add demo secrets:
@@ -160,9 +142,9 @@ az keyvault create \
 
 Grant yourself **Key Vault Secrets User** on the target vault so you can verify it is empty. Because the vault uses Azure RBAC authorization, `az keyvault secret list` returns 403 without a role assignment — even for the vault creator:
 
-```bash
-export MY_OBJECT_ID=$(az ad signed-in-user show --query id -o tsv)
+> `MY_OBJECT_ID` is pre-populated by `env.sh`. If it is empty, re-run `source env.sh`.
 
+```bash
 az role assignment create \
   --role "Key Vault Secrets User" \
   --assignee-object-id "$MY_OBJECT_ID" \
@@ -198,12 +180,15 @@ az aks create \
 
 Configure `kubectl` access and capture the OIDC issuer URL:
 
+> `OIDC_ISSUER` is pre-populated by `env.sh`. Re-run `source env.sh` after cluster creation to populate it, or run the export below.
+
 ```bash
 az aks get-credentials \
   --resource-group "$AKS_RG" \
   --name "$AKS_NAME" \
   --overwrite-existing
 
+# Already in env.sh — run manually if not yet sourced after cluster creation
 export OIDC_ISSUER=$(az aks show \
   --resource-group "$AKS_RG" \
   --name "$AKS_NAME" \
@@ -218,12 +203,15 @@ echo "OIDC Issuer: $OIDC_ISSUER"
 
 ### Create the identity
 
+> `CLIENT_ID` and `PRINCIPAL_ID` are pre-populated by `env.sh`. Re-run `source env.sh` after identity creation to populate them, or run the exports below.
+
 ```bash
 az identity create \
   --name "$IDENTITY_NAME" \
   --resource-group "$IDENTITY_RG" \
   --location "$AKS_LOCATION"
 
+# Already in env.sh — run manually if not yet sourced after identity creation
 export CLIENT_ID=$(az identity show \
   --name "$IDENTITY_NAME" \
   --resource-group "$IDENTITY_RG" \
@@ -256,7 +244,10 @@ az identity federated-credential create \
 
 ## Step 6 — Assign Least-Privilege RBAC
 
+> `SOURCE_KV_ID` and `TARGET_KV_ID` are pre-populated by `env.sh`. Re-run `source env.sh` if empty.
+
 ```bash
+# Already in env.sh — run manually if not yet sourced
 export SOURCE_KV_ID=$(az keyvault show --name "$SOURCE_KV" --query id -o tsv)
 export TARGET_KV_ID=$(az keyvault show --name "$TARGET_KV" --query id -o tsv)
 ```
@@ -292,16 +283,57 @@ az role assignment list --assignee "$PRINCIPAL_ID" --output table
 
 ---
 
-## Step 7 — Build and Push the Sync Container Image
+## Step 7 — Run the Sync Script Locally *(optional but recommended)*
 
-The sync application used in this walkthrough is [mburakunuvar/akv-sync](https://github.com/mburakunuvar/akv-sync). Clone and build it:
+Before containerizing, validate the sync logic directly using your `az login` credentials. This isolates script bugs from identity/container issues.
+
+Clone the sync app and inspect it:
 
 ```bash
 git clone https://github.com/mburakunuvar/akv-sync.git
 cd akv-sync
 ```
 
-Create an Azure Container Registry and push the image:
+Set the required environment variables and run the script directly:
+
+```bash
+export SOURCE_VAULT_URL="https://${SOURCE_KV}.vault.azure.net"
+export TARGET_VAULT_URL="https://${TARGET_KV}.vault.azure.net"
+
+# Run using your az login credentials (not Workload Identity)
+# Python example:
+python main.py
+# or Go example:
+# go run .
+```
+
+Verify all 3 secrets appear in the target vault:
+
+```bash
+az keyvault secret list --vault-name "$TARGET_KV" --output table
+```
+
+Confirm the values match the source:
+
+```bash
+az keyvault secret show --vault-name "$TARGET_KV" --name "db-password" --query value -o tsv
+```
+
+> **Note:** This uses your personal CLI token which has broader permissions than the managed identity. It validates the script logic only — RBAC boundary enforcement is tested in Step 10.
+
+---
+
+## Step 8 — Build and Push the Sync Container Image
+
+The sync application used in this walkthrough is [mburakunuvar/akv-sync](https://github.com/mburakunuvar/akv-sync).
+
+Build and test the image locally first:
+
+```bash
+docker build -t akv-sync:local .
+```
+
+Once the local build passes, create an Azure Container Registry and push the image:
 
 ```bash
 az acr create \
@@ -311,6 +343,7 @@ az acr create \
 
 az acr login --name "$ACR_NAME"
 
+# Already in env.sh — run manually if not yet sourced after ACR creation
 export ACR_LOGIN_SERVER=$(az acr show --name "$ACR_NAME" --query loginServer -o tsv)
 
 docker build -t "${ACR_LOGIN_SERVER}/akv-sync:latest" .
@@ -328,11 +361,12 @@ az aks update \
 
 ---
 
-## Step 8 — Deploy to AKS as a CronJob
+## Step 9 — Deploy to AKS as a CronJob
 
 Apply the following three manifests. Replace the placeholder values with your actual `$CLIENT_ID`, `$TENANT_ID`, `$SOURCE_KV` and `$TARGET_KV` before applying, or use `envsubst` as shown below.
 
 ```bash
+# Already in env.sh — run manually if not yet sourced
 export TENANT_ID=$(az account show --query tenantId -o tsv)
 ```
 
@@ -416,7 +450,7 @@ kubectl get cronjob -n akv-sync
 
 ---
 
-## Step 9 — Validate the Sync
+## Step 10 — Validate the Sync
 
 ### Trigger the job manually (don't wait for the next scheduled run)
 
