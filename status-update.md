@@ -13,7 +13,13 @@
 
 ## Remaining
 
-- **Step 7 *(optional but recommended)*:** Clone `mburakunuvar/akv-sync`, run the script locally with `az login` credentials, and verify all 3 secrets sync to the target vault
+- **Step 7B *(optional but recommended)*:** Run the Python sync script (`akv-sync-python/akv_sync.py`) locally — install dependencies, set `SOURCE_VAULT_URL` / `TARGET_VAULT_URL`, optionally dry-run, execute with `az login` credentials, and verify all 3 secrets sync to the target vault
 - **Step 8:** Build the Docker image locally, create ACR, push the image, and attach ACR to AKS
 - **Step 9:** Export `TENANT_ID`, create the three Kubernetes manifests (`namespace.yaml`, `serviceaccount.yaml`, `cronjob.yaml`), and apply them via `envsubst`
 - **Step 10:** Trigger a manual sync job, verify all three secrets appear in the target vault, test a secret rotation end-to-end, and confirm the identity returns 403 when attempting to write to the source vault
+
+---
+
+## Previously Completed (reference)
+
+- ~~**Step 7A *(optional but recommended)*:** Clone `mburakunuvar/akv-sync`, run the bash script locally with `az login` credentials, and verify all 3 secrets sync to the target vault~~ **DONE** — cloned repo to `/workspaces/akv-sync`; wrote `local-sync-test.sh` wrapper (akv-sync's built-in workload-identity auth requires AKS pod env vars, not available locally); granted `Key Vault Secrets Officer` to local user on target vault; all 3 secrets (`api-key`, `db-password`, `storage-account-key`) synced and values verified as matching

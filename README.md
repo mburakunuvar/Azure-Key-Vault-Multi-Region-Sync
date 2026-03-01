@@ -283,7 +283,7 @@ az role assignment list --assignee "$PRINCIPAL_ID" --output table
 
 ---
 
-## Step 7 — Run the Sync Script Locally *(optional but recommended)*
+## Step 7A — Run the Sync Bash Script Locally to test *(optional but recommended)*
 
 Before containerizing, validate the sync logic directly using your `az login` credentials. This isolates script bugs from identity/container issues.
 
@@ -320,6 +320,50 @@ az keyvault secret show --vault-name "$TARGET_KV" --name "db-password" --query v
 ```
 
 > **Note:** This uses your personal CLI token which has broader permissions than the managed identity. It validates the script logic only — RBAC boundary enforcement is tested in Step 10.
+
+---
+
+## Step 7B — Run the Sync Python Script Locally to test *(optional but recommended)*
+
+Validate the Python version of the sync logic using your `az login` credentials before containerizing.
+
+Install the Python dependencies:
+
+```bash
+cd akv-sync-python
+pip install -r requirements.txt
+```
+
+Set the required environment variables and run the script:
+
+```bash
+export SOURCE_VAULT_URL="https://${SOURCE_KV}.vault.azure.net"
+export TARGET_VAULT_URL="https://${TARGET_KV}.vault.azure.net"
+
+# Run using your az login credentials (DefaultAzureCredential fallback)
+python akv_sync.py
+```
+
+Optionally test with dry-run first:
+
+```bash
+export DRY_RUN=true
+python akv_sync.py
+```
+
+Verify all 3 secrets appear in the target vault:
+
+```bash
+az keyvault secret list --vault-name "$TARGET_KV" --output table
+```
+
+Confirm the values match the source:
+
+```bash
+az keyvault secret show --vault-name "$TARGET_KV" --name "db-password" --query value -o tsv
+```
+
+> **Note:** This uses your personal CLI token via `DefaultAzureCredential` which has broader permissions than the managed identity. It validates the script logic only — RBAC boundary enforcement is tested in Step 10.
 
 ---
 

@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: akv-sync-config
+  namespace: akv-sync
+data:
+  SOURCE_VAULT_URL: "https://${SOURCE_KV}.vault.azure.net"
+  TARGET_VAULT_URL: "https://${TARGET_KV}.vault.azure.net"
+  DRY_RUN: "false"
+  LOG_LEVEL: "INFO"
+  EXCLUDE_SECRETS: ""
+  SYNC_DISABLED: "true"

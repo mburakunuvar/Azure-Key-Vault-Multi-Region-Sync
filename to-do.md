@@ -91,15 +91,29 @@ All commands are in [README.md](README.md).
 
 ---
 
-## Step 7 — Run the Sync Script Locally *(optional but recommended)*
+## Step 7A — Run the Sync Bash Script Locally to test *(optional but recommended)*
 
 > Validate the sync logic with your own Azure CLI credentials before building any container.
 
-- [ ] Clone the sync app: `git clone https://github.com/mburakunuvar/akv-sync.git`
-- [ ] Change into the `akv-sync` directory
-- [ ] Inspect the code — understand what env vars or config it expects
+- [x] Clone the sync app: `git clone https://github.com/mburakunuvar/akv-sync.git`
+- [x] Change into the `akv-sync` directory
+- [x] Inspect the code — understand what env vars or config it expects
+- [x] Set required env vars (`SOURCE_VAULT_URL`, `TARGET_VAULT_URL`) pointing at the real vaults
+- [x] Run the script locally (`local-sync-test.sh`) using `az login` credentials — granted user **Key Vault Secrets Officer** on target vault for local testing
+- [x] Verify all 3 secrets appear in the target vault: `az keyvault secret list --vault-name "$TARGET_KV" --output table`
+- [x] Confirm the values match the source vault
+
+---
+
+## Step 7B — Run the Sync Python Script Locally to test *(optional but recommended)*
+
+> Validate the Python version of the sync logic with your own Azure CLI credentials before building the container.
+
+- [ ] Change into the `akv-sync-python` directory
+- [ ] Install Python dependencies: `pip install -r requirements.txt`
 - [ ] Set required env vars (`SOURCE_VAULT_URL`, `TARGET_VAULT_URL`) pointing at the real vaults
-- [ ] Run the script locally (e.g. `python main.py` or `go run .`) using your `az login` credentials
+- [ ] (Optional) Test with dry-run first: `DRY_RUN=true python akv_sync.py`
+- [ ] Run the script locally: `python akv_sync.py` using `az login` credentials
 - [ ] Verify all 3 secrets appear in the target vault: `az keyvault secret list --vault-name "$TARGET_KV" --output table`
 - [ ] Confirm the values match the source vault
 
