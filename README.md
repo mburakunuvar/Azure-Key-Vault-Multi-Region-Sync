@@ -1,5 +1,17 @@
 # Azure Key Vault Multi-Region Sync Solution
 
+## Approach Overview
+
+### Azure Key Vault Native Backup/Restore ([Security Worlds](https://learn.microsoft.com/en-us/azure/key-vault/general/overview-security-worlds#backup-and-restore-behavior))
+
+Azure Key Vault objects (keys, secrets, certificates) are backed up as **HSM-encrypted blobs** tied to the **security world** of the source Azure geography — a shared cryptographic boundary across all Key Vaults in that geography (e.g., all of Europe). Because the encryption material never leaves that geography's HSMs, **restore is only possible within the same geography**. Cross-geography DR (e.g., West Europe → East US) is not supported natively.
+
+### This Repository: AKS CronJob Sync
+
+A self-hosted AKS CronJob that **reads secrets from a source Key Vault and writes them to a target Key Vault** in a different region or geography — explicitly working around the security-worlds restriction. It uses Workload Identity (no stored credentials), runs on a configurable schedule (default: every 15 minutes), and performs value-diffing to avoid unnecessary writes.
+
+---
+
 A step-by-step walkthrough for syncing secrets from one Azure Key Vault to another across geographies — enabling cross-region disaster recovery without using Azure's native backup/restore, which is [limited to the same Azure geography](https://learn.microsoft.com/en-us/azure/key-vault/general/overview-security-worlds).
 
 An AKS CronJob authenticates via **Microsoft Entra Workload Identity** (no stored credentials), reads secrets from a **source Key Vault**, and writes them to a **target Key Vault** in a different region.
@@ -695,3 +707,42 @@ az group delete --name "$AKS_RG"     --yes --no-wait
 - [Azure Key Vault RBAC guide](https://learn.microsoft.com/en-us/azure/key-vault/general/rbac-guide)
 - [Reference sync implementation — mburakunuvar/akv-sync](https://github.com/mburakunuvar/akv-sync)
 - [Multi-region Key Vault sync pattern (dev.to)](https://dev.to/anderson_leite/building-an-azure-key-vault-multi-region-sync-solution-3ca7)
+
+---
+
+## Comparison: Native Backup/Restore vs. This Repo
+
+| Feature / Dimension | AKV Native Backup/Restore | This Repo (CronJob Sync) |
+|---|---|---|
+| **Cross-geography support** | No — same geography only | Yes — any region/geography |
+| **What is synced** | Keys, secrets, certificates (all object types) | Secrets only |
+| **Consistency model** | Point-in-time snapshot | Eventual (cron-based, configurable RPO) |
+| **Default RPO** | Manual / on-demand | ~15 min (configurable down to ~1 min) |
+| **Automation** | Manual CLI/SDK trigger | Fully automated via Kubernetes CronJob |
+| **Auth model** | Azure RBAC (operator must have rights) | Workload Identity — zero stored credentials |
+| **Infrastructure required** | None (built-in) | AKS cluster, container image |
+| **Operational complexity** | Very low — native feature | Medium — cluster, RBAC, CronJob config |
+| **Key/cert sync** | Yes | No |
+| **Secret versioning preserved** | Yes (full history) | No — only current enabled value |
+| **Conflict handling** | N/A (restore overwrites) | Diff-based: skip if identical, update if changed |
+| **Cost** | Included in AKV pricing | AKS node + API call costs |
+| **Credential exposure risk** | Low (operator access) | Very low (Workload Identity, no secrets in cluster) |
+| **Auditability** | Azure Monitor / KV logs | Kubernetes job logs + Azure activity logs |
+| **Setup complexity** | None | High (AKS, identity federation, RBAC wiring) |
+| **DR use case fit** | Same-geography failover only | Cross-geography / cross-subscription DR |
+
+> **Bottom line:** Native backup/restore is zero-effort and covers all object types but is geographically locked by HSM security worlds. This repo trades operational complexity for the ability to replicate secrets across any geography, making it the only viable option for true cross-region DR of Key Vault secrets.
+
+---
+
+> **⚠️ Warning — Key Sync is Possible but Not Recommended**
+>
+> Keys can technically be synced if created with the `Exportable` flag, which exposes private key material via `GET /keys/{name}/export` (JWK format). For HSM-backed keys (`RSA-HSM`, `EC-HSM`), Azure's **Secure Key Release (SKR)** feature can be used, but requires a release policy, an attested environment (e.g., Confidential VM), and a Premium SKU vault.
+>
+> However, this approach has serious tradeoffs:
+> - **Exportable keys defeat the core HSM security guarantee** — private material leaves the cryptographic boundary.
+> - Importing a key into the target creates a **new key version with a different ID**, causing divergence between vaults.
+> - Secret rotation requires re-exporting and re-importing every new key version.
+> - Certificates share the same limitation since their private keys are stored as Key Vault keys internally.
+>
+> If your threat model requires HSM-backed non-exportable keys, do not attempt to sync them. The recommended DR pattern in that case is **application-level geo-redundancy** — configure your application to fall back to the target vault if the source is unavailable, rather than replicating the key material itself.
