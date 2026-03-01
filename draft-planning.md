@@ -142,14 +142,39 @@ Your sync logic must:
 1. Build a container image for the sync app
 2. Push image to a container registry
 3. Deploy to AKS as a **CronJob**
-4. Example schedule:
-   - Every 5 minutes
-   - Every 15 minutes
-   - Based on acceptable RPO
+4. Default schedule: **every 15 minutes** (`*/15 * * * *`)
+   - Adjust based on acceptable RPO
+   - `*/5 * * * *` for 5-minute RPO
+   - `*/30 * * * *` for 30-minute RPO
 
 Deployment options:
 - Helm chart (recommended)
 - Raw Kubernetes manifests
+
+### What happens each cycle
+
+The sync is **not** a long-running process. Each scheduled trigger:
+
+1. Kubernetes creates a **short-lived pod** from the CronJob spec
+2. The pod receives an Azure AD token via **Workload Identity** (automatic, no stored credentials)
+3. The sync script:
+   - Lists all secrets in the **source** vault
+   - For each secret, compares value and enabled-state against the **target** vault
+   - Creates missing secrets, updates changed ones, skips identical ones
+4. The pod logs a summary and exits (`Completed`)
+5. Kubernetes retains the last 3 successful and 5 failed job records
+
+The script is **idempotent** — running it repeatedly with no source changes produces no writes, no API cost beyond listing, and a clean `Skipped: N, Errors: 0` log.
+
+### CronJob safeguards
+
+| Setting | Value | Effect |
+|---------|-------|--------|
+| `concurrencyPolicy` | `Forbid` | Skips the next trigger if the previous run is still active |
+| `activeDeadlineSeconds` | `600` | Kills any run exceeding 10 minutes |
+| `backoffLimit` | `2` | Retries a failed pod up to 2 times before marking the job failed |
+
+> **RPO note:** The CronJob interval is your effective Recovery Point Objective. With the default 15-minute schedule, a rotated secret takes at most 15 minutes to propagate to the target vault.
 
 ---
 

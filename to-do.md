@@ -109,26 +109,25 @@ All commands are in [README.md](README.md).
 
 > Validate the Python version of the sync logic with your own Azure CLI credentials before building the container.
 
-- [ ] Change into the `akv-sync-python` directory
-- [ ] Install Python dependencies: `pip install -r requirements.txt`
-- [ ] Set required env vars (`SOURCE_VAULT_URL`, `TARGET_VAULT_URL`) pointing at the real vaults
-- [ ] (Optional) Test with dry-run first: `DRY_RUN=true python akv_sync.py`
-- [ ] Run the script locally: `python akv_sync.py` using `az login` credentials
-- [ ] Verify all 3 secrets appear in the target vault: `az keyvault secret list --vault-name "$TARGET_KV" --output table`
-- [ ] Confirm the values match the source vault
+- [x] Change into the `akv-sync-python` directory
+- [x] Install Python dependencies: `pip install -r requirements.txt`
+- [x] Set required env vars (`SOURCE_VAULT_URL`, `TARGET_VAULT_URL`) pointing at the real vaults
+- [x] (Optional) Test with dry-run first: `DRY_RUN=true python akv_sync.py` — authenticated via `AzureCliCredential`; found 3 secrets, all up-to-date, `Skipped: 3, Errors: 0`
+- [x] Run the script locally: `python akv_sync.py` using `az login` credentials — `Created: 0 | Updated: 0 | Skipped: 3 | Errors: 0`
+- [x] Verify all 3 secrets appear in the target vault: `az keyvault secret list --vault-name "$TARGET_KV" --output table`
+- [x] Confirm the values match the source vault — `db-password` value confirmed identical (`S3cur3P@ssw0rd!`)
 
 ---
 
 ## Step 8 — Build and Push the Sync Container Image
 
-- [ ] Build the Docker image locally: `docker build -t akv-sync:local .`
-- [ ] (Optional) Run the container locally to validate it behaves identically to the raw script
-- [ ] Create the Azure Container Registry (`acrakvsync` — must be globally unique)
-- [ ] Log in to ACR: `az acr login --name "$ACR_NAME"`
-- [ ] Capture `ACR_LOGIN_SERVER` into a variable
-- [ ] Tag and push the image: `docker push "${ACR_LOGIN_SERVER}/akv-sync:latest"`
-- [ ] Attach ACR to AKS: `az aks update --attach-acr "$ACR_NAME"`
-- [ ] Verify image is in registry: `az acr repository list --name "$ACR_NAME" --output table`
+- [x] Build the Docker image locally: `docker build -t akv-sync-python:local ./akv-sync-python` — all layers cached, image `284569b16b5e`
+- [x] Create the Azure Container Registry (`acrakvsync`, Basic SKU, West Europe)
+- [x] Log in to ACR: `az acr login --name "$ACR_NAME"` — Login Succeeded
+- [x] Capture `ACR_LOGIN_SERVER` into a variable — `acrakvsync.azurecr.io`
+- [x] Tag and push the image: `docker push "${ACR_LOGIN_SERVER}/akv-sync-python:latest"` — pushed (digest `sha256:d928354…`)
+- [x] Attach ACR to AKS: `az aks update --attach-acr "$ACR_NAME"` — AAD role propagation done
+- [x] Verify image is in registry: `az acr repository list --name "$ACR_NAME" --output table` — `akv-sync-python` listed
 
 ---
 

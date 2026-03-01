@@ -34,6 +34,32 @@ An AKS CronJob authenticates via **Microsoft Entra Workload Identity** (no store
 | Credential storage    | None — Workload Identity only      |
 | Authorization model   | Azure RBAC (least-privilege)       |
 | What is synced        | Secrets only (keys/certs excluded) |
+| Default sync interval | Every 15 minutes (`*/15 * * * *`)  |
+
+### How It Works at Runtime
+
+Once deployed, Kubernetes triggers the CronJob on the configured schedule (default: **every 15 minutes**). Each cycle:
+
+1. **Pod creation** — Kubernetes spawns a short-lived pod from the CronJob spec.
+2. **Authentication** — The pod receives an Azure AD token automatically via Workload Identity (no secrets stored in the cluster).
+3. **Source scan** — The Python script lists all secrets in the source Key Vault.
+4. **Diff & sync** — For each secret it compares the value and enabled-state against the target vault:
+   - **Missing** in target → created
+   - **Different** value or state → updated
+   - **Identical** → skipped (no write, no API cost)
+5. **Exit** — The pod logs a summary (`Created: N | Updated: N | Skipped: N | Errors: N`) and terminates with status `Completed`.
+
+Kubernetes retains the last 3 successful and 5 failed job records for inspection.
+
+**Key safeguards:**
+
+| Setting | Effect |
+|---------|--------|
+| `concurrencyPolicy: Forbid` | If the previous run is still in progress, the next scheduled run is skipped — no overlapping syncs |
+| `activeDeadlineSeconds: 600` | A run that exceeds 10 minutes is killed to prevent hung pods |
+| `backoffLimit: 2` | A failed pod retries up to 2 times before the job is marked failed |
+
+The sync interval equals your **RPO** (Recovery Point Objective) — in the worst case, a rotated secret takes up to 15 minutes to propagate. To tighten the RPO, lower the `schedule` value (e.g. `*/5 * * * *` for 5-minute RPO).
 
 ---
 
@@ -369,12 +395,21 @@ az keyvault secret show --vault-name "$TARGET_KV" --name "db-password" --query v
 
 ## Step 8 — Build and Push the Sync Container Image
 
-The sync application used in this walkthrough is [mburakunuvar/akv-sync](https://github.com/mburakunuvar/akv-sync).
+This repository contains two sync implementations — pick the one you tested in Step 7:
 
-Build and test the image locally first:
+| Variant | Directory | Dockerfile | Image name |
+|---------|-----------|------------|------------|
+| **Bash** (akv-sync.sh + az CLI) | `akv-sync-bash/` | `akv-sync-bash/Dockerfile` | `akv-sync` |
+| **Python** (akv_sync.py + SDK) | `akv-sync-python/` | `akv-sync-python/Dockerfile` | `akv-sync-python` |
+
+Build and test the image locally first (example shows **Python**; substitute the path for Bash):
 
 ```bash
-docker build -t akv-sync:local .
+# Python variant
+docker build -t akv-sync-python:local ./akv-sync-python
+
+# — OR — Bash variant
+# docker build -t akv-sync:local ./akv-sync-bash
 ```
 
 Once the local build passes, create an Azure Container Registry and push the image:
@@ -390,8 +425,13 @@ az acr login --name "$ACR_NAME"
 # Already in env.sh — run manually if not yet sourced after ACR creation
 export ACR_LOGIN_SERVER=$(az acr show --name "$ACR_NAME" --query loginServer -o tsv)
 
-docker build -t "${ACR_LOGIN_SERVER}/akv-sync:latest" .
-docker push "${ACR_LOGIN_SERVER}/akv-sync:latest"
+# Python variant
+docker build -t "${ACR_LOGIN_SERVER}/akv-sync-python:latest" ./akv-sync-python
+docker push "${ACR_LOGIN_SERVER}/akv-sync-python:latest"
+
+# — OR — Bash variant
+# docker build -t "${ACR_LOGIN_SERVER}/akv-sync:latest" ./akv-sync-bash
+# docker push "${ACR_LOGIN_SERVER}/akv-sync:latest"
 ```
 
 Attach the ACR to AKS so it can pull images without separate credentials:
@@ -407,14 +447,37 @@ az aks update \
 
 ## Step 9 — Deploy to AKS as a CronJob
 
-Apply the following three manifests. Replace the placeholder values with your actual `$CLIENT_ID`, `$TENANT_ID`, `$SOURCE_KV` and `$TARGET_KV` before applying, or use `envsubst` as shown below.
+Both sync variants ship with ready-to-use Kubernetes manifests that contain `${…}` placeholders for `envsubst`.
+
+| Variant | Manifests directory |
+|---------|--------------------|
+| **Bash** | `akv-sync-bash/helm-chart/` (Helm) — or write raw manifests following the YAML below |
+| **Python** | `akv-sync-python/k8s/` (raw manifests with `envsubst` placeholders) |
+
+Ensure the required variables are set (already in `env.sh`):
 
 ```bash
 # Already in env.sh — run manually if not yet sourced
 export TENANT_ID=$(az account show --query tenantId -o tsv)
+export ACR_LOGIN_SERVER=$(az acr show --name "$ACR_NAME" --query loginServer -o tsv)
 ```
 
-### namespace.yaml
+### Option A — Use the pre-built Python manifests
+
+The `akv-sync-python/k8s/` directory contains four files: `namespace.yaml`, `serviceaccount.yaml`, `configmap.yaml`, and `cronjob.yaml`. Apply them with `envsubst`:
+
+```bash
+envsubst < akv-sync-python/k8s/namespace.yaml      | kubectl apply -f -
+envsubst < akv-sync-python/k8s/serviceaccount.yaml  | kubectl apply -f -
+envsubst < akv-sync-python/k8s/configmap.yaml       | kubectl apply -f -
+envsubst < akv-sync-python/k8s/cronjob.yaml         | kubectl apply -f -
+```
+
+### Option B — Write inline manifests (works for either variant)
+
+If you prefer to keep manifests self-contained, create and apply the following three files.
+
+#### namespace.yaml
 
 ```yaml
 apiVersion: v1
@@ -423,7 +486,7 @@ metadata:
   name: akv-sync
 ```
 
-### serviceaccount.yaml
+#### serviceaccount.yaml
 
 ```yaml
 apiVersion: v1
@@ -436,7 +499,7 @@ metadata:
     azure.workload.identity/tenant-id: "${TENANT_ID}"
 ```
 
-### cronjob.yaml
+#### cronjob.yaml
 
 ```yaml
 apiVersion: batch/v1
@@ -461,14 +524,14 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: akv-sync
-              image: "${ACR_LOGIN_SERVER}/akv-sync:latest"
+              image: "${ACR_LOGIN_SERVER}/akv-sync-python:latest"
               env:
                 - name: SOURCE_VAULT_URL
                   value: "https://${SOURCE_KV}.vault.azure.net"
                 - name: TARGET_VAULT_URL
                   value: "https://${TARGET_KV}.vault.azure.net"
                 - name: LOG_LEVEL
-                  value: "info"
+                  value: "INFO"
               resources:
                 requests:
                   cpu: "100m"
