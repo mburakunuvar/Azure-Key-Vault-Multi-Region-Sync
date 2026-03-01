@@ -7,16 +7,16 @@ All commands are in [README.md](README.md).
 
 ## Prerequisites
 
-- [x] Azure CLI installed (`az version` → 2.50 or higher) — **2.83.0**
-- [x] kubectl installed (`kubectl version --client` → 1.27 or higher) — **1.34.2**
-- [x] Docker installed (`docker --version` → 24 or higher) — **28.5.1**
-- [x] Logged in to Azure CLI (`az login`)
-- [x] Azure subscription available and you have **Contributor** + **User Access Administrator** rights
-- [x] Registered resource providers:
-  - [x] `Microsoft.KeyVault`
-  - [x] `Microsoft.ContainerService`
-  - [x] `Microsoft.ManagedIdentity`
-  - [x] `Microsoft.ContainerRegistry`
+- [ ] Azure CLI installed (`az version` → 2.50 or higher)
+- [ ] kubectl installed (`kubectl version --client` → 1.27 or higher)
+- [ ] Docker installed (`docker --version` → 24 or higher)
+- [ ] Logged in to Azure CLI (`az login`)
+- [ ] Azure subscription available and you have **Contributor** + **User Access Administrator** rights
+- [ ] Registered resource providers:
+  - [ ] `Microsoft.KeyVault`
+  - [ ] `Microsoft.ContainerService`
+  - [ ] `Microsoft.ManagedIdentity`
+  - [ ] `Microsoft.ContainerRegistry`
 
 ---
 
@@ -30,64 +30,64 @@ All commands are in [README.md](README.md).
 
 ## Step 1 — Resource Groups
 
-- [x] Create source resource group (`rg-akv-sync-source` in West Europe)
-- [x] Create target resource group (`rg-akv-sync-target` in Sweden Central)
-- [x] Create AKS resource group (`rg-akv-sync-aks` in West Europe)
-- [x] Verify: `az group list --output table`
+- [ ] Create source resource group (`rg-akv-sync-source` in West Europe)
+- [ ] Create target resource group (`rg-akv-sync-target` in Sweden Central)
+- [ ] Create AKS resource group (`rg-akv-sync-aks` in West Europe)
+- [ ] Verify: `az group list --output table`
 
 ---
 
 ## Step 2 — Source Key Vault
 
-- [x] Create source Key Vault with RBAC authorization, soft delete, and purge protection enabled
-- [x] Grant your own user account the **Key Vault Secrets Officer** role on the source vault
-  - [x] Confirm `MY_OBJECT_ID` is populated: `echo "$MY_OBJECT_ID"`
-- [x] Add the three demo secrets:
-  - [x] `db-password`
-  - [x] `api-key`
-  - [x] `storage-account-key`
-- [x] Verify secrets exist: `az keyvault secret list --vault-name "$SOURCE_KV" --output table`
+- [ ] Create source Key Vault with RBAC authorization, soft delete, and purge protection enabled
+- [ ] Grant your own user account the **Key Vault Secrets Officer** role on the source vault
+  - [ ] Confirm `MY_OBJECT_ID` is populated: `echo "$MY_OBJECT_ID"`
+- [ ] Add the three demo secrets:
+  - [ ] `db-password`
+  - [ ] `api-key`
+  - [ ] `storage-account-key`
+- [ ] Verify secrets exist: `az keyvault secret list --vault-name "$SOURCE_KV" --output table`
 
 ---
 
 ## Step 3 — Target Key Vault
 
-- [x] Create target Key Vault (`kv-akvsync-target-dr`) in Sweden Central with the same protection flags
-- [x] Confirm the target vault is empty: `az keyvault secret list --vault-name "$TARGET_KV" --output table`
-- [x] **Do not** add any secrets manually — sync will own this vault
+- [ ] Create target Key Vault in Sweden Central with the same protection flags
+- [ ] Confirm the target vault is empty: `az keyvault secret list --vault-name "$TARGET_KV" --output table`
+- [ ] **Do not** add any secrets manually — sync will own this vault
 
 ---
 
 ## Step 4 — AKS Cluster
 
-- [x] Create AKS cluster with `--enable-oidc-issuer` and `--enable-workload-identity`
-- [x] Run `az aks get-credentials` to configure kubectl
-- [x] Capture the OIDC issuer URL into `$OIDC_ISSUER`
-- [x] Verify: `echo "$OIDC_ISSUER"` — should print a URL ending in `/`
-- [x] Verify kubectl access: `kubectl get nodes`
+- [ ] Create AKS cluster with `--enable-oidc-issuer` and `--enable-workload-identity`
+- [ ] Run `az aks get-credentials` to configure kubectl
+- [ ] Capture the OIDC issuer URL into `$OIDC_ISSUER`
+- [ ] Verify: `echo "$OIDC_ISSUER"` — should print a URL ending in `/`
+- [ ] Verify kubectl access: `kubectl get nodes`
 
 ---
 
 ## Step 5 — Managed Identity and Federated Credential
 
-- [x] Create the User-Assigned Managed Identity (`id-akvsync`)
-- [x] Capture `CLIENT_ID` and `PRINCIPAL_ID` into variables
-- [x] Verify: `echo "$CLIENT_ID"` and `echo "$PRINCIPAL_ID"` — both should be non-empty GUIDs
-- [x] Create the federated identity credential linking:
-  - [x] The AKS OIDC issuer (`$OIDC_ISSUER`)
-  - [x] The Kubernetes subject `system:serviceaccount:akv-sync:akv-sync-sa`
-  - [x] Audience `api://AzureADTokenExchange`
-- [x] Verify: `az identity federated-credential list --identity-name "$IDENTITY_NAME" --resource-group "$IDENTITY_RG" --output table`
+- [ ] Create the User-Assigned Managed Identity (`id-akvsync`)
+- [ ] Capture `CLIENT_ID` and `PRINCIPAL_ID` into variables
+- [ ] Verify: `echo "$CLIENT_ID"` and `echo "$PRINCIPAL_ID"` — both should be non-empty GUIDs
+- [ ] Create the federated identity credential linking:
+  - [ ] The AKS OIDC issuer (`$OIDC_ISSUER`)
+  - [ ] The Kubernetes subject `system:serviceaccount:akv-sync:akv-sync-sa`
+  - [ ] Audience `api://AzureADTokenExchange`
+- [ ] Verify: `az identity federated-credential list --identity-name "$IDENTITY_NAME" --resource-group "$IDENTITY_RG" --output table`
 
 ---
 
 ## Step 6 — RBAC Assignments
 
-- [x] Capture `SOURCE_KV_ID` and `TARGET_KV_ID` into variables
-- [x] Assign **Key Vault Secrets User** to the identity on the **source** vault (read-only)
-- [x] Assign **Key Vault Secrets Officer** to the identity on the **target** vault (write)
-- [x] Verify both assignments: `az role assignment list --assignee "$PRINCIPAL_ID" --output table`
-- [x] Confirm there is **no write role** on the source vault for this identity
+- [ ] Capture `SOURCE_KV_ID` and `TARGET_KV_ID` into variables
+- [ ] Assign **Key Vault Secrets User** to the identity on the **source** vault (read-only)
+- [ ] Assign **Key Vault Secrets Officer** to the identity on the **target** vault (write)
+- [ ] Verify both assignments: `az role assignment list --assignee "$PRINCIPAL_ID" --output table`
+- [ ] Confirm there is **no write role** on the source vault for this identity
 
 ---
 
@@ -95,13 +95,13 @@ All commands are in [README.md](README.md).
 
 > Validate the sync logic with your own Azure CLI credentials before building any container.
 
-- [x] Clone the sync app: `git clone https://github.com/mburakunuvar/akv-sync.git`
-- [x] Change into the `akv-sync` directory
-- [x] Inspect the code — understand what env vars or config it expects
-- [x] Set required env vars (`SOURCE_VAULT_URL`, `TARGET_VAULT_URL`) pointing at the real vaults
-- [x] Run the script locally (`local-sync-test.sh`) using `az login` credentials — granted user **Key Vault Secrets Officer** on target vault for local testing
-- [x] Verify all 3 secrets appear in the target vault: `az keyvault secret list --vault-name "$TARGET_KV" --output table`
-- [x] Confirm the values match the source vault
+- [ ] Clone the sync app: `git clone https://github.com/mburakunuvar/akv-sync.git`
+- [ ] Change into the `akv-sync` directory
+- [ ] Inspect the code — understand what env vars or config it expects
+- [ ] Set required env vars (`SOURCE_VAULT_URL`, `TARGET_VAULT_URL`) pointing at the real vaults
+- [ ] Run the script locally (`local-sync-test.sh`) using `az login` credentials
+- [ ] Verify all 3 secrets appear in the target vault: `az keyvault secret list --vault-name "$TARGET_KV" --output table`
+- [ ] Confirm the values match the source vault
 
 ---
 
@@ -109,42 +109,35 @@ All commands are in [README.md](README.md).
 
 > Validate the Python version of the sync logic with your own Azure CLI credentials before building the container.
 
-- [x] Change into the `akv-sync-python` directory
-- [x] Install Python dependencies: `pip install -r requirements.txt`
-- [x] Set required env vars (`SOURCE_VAULT_URL`, `TARGET_VAULT_URL`) pointing at the real vaults
-- [x] (Optional) Test with dry-run first: `DRY_RUN=true python akv_sync.py` — authenticated via `AzureCliCredential`; found 3 secrets, all up-to-date, `Skipped: 3, Errors: 0`
-- [x] Run the script locally: `python akv_sync.py` using `az login` credentials — `Created: 0 | Updated: 0 | Skipped: 3 | Errors: 0`
-- [x] Verify all 3 secrets appear in the target vault: `az keyvault secret list --vault-name "$TARGET_KV" --output table`
-- [x] Confirm the values match the source vault — `db-password` value confirmed identical (`S3cur3P@ssw0rd!`)
+- [ ] Change into the `akv-sync-python` directory
+- [ ] Install Python dependencies: `pip install -r requirements.txt`
+- [ ] Set required env vars (`SOURCE_VAULT_URL`, `TARGET_VAULT_URL`) pointing at the real vaults
+- [ ] (Optional) Test with dry-run first: `DRY_RUN=true python akv_sync.py`
+- [ ] Run the script locally: `python akv_sync.py` using `az login` credentials
+- [ ] Verify all 3 secrets appear in the target vault: `az keyvault secret list --vault-name "$TARGET_KV" --output table`
+- [ ] Confirm the values match the source vault
 
 ---
 
 ## Step 8 — Build and Push the Sync Container Image
 
-- [x] Build the Docker image locally: `docker build -t akv-sync-python:local ./akv-sync-python` — all layers cached, image `284569b16b5e`
-- [x] Create the Azure Container Registry (`acrakvsync`, Basic SKU, West Europe)
-- [x] Log in to ACR: `az acr login --name "$ACR_NAME"` — Login Succeeded
-- [x] Capture `ACR_LOGIN_SERVER` into a variable — `acrakvsync.azurecr.io`
-- [x] Tag and push the image: `docker push "${ACR_LOGIN_SERVER}/akv-sync-python:latest"` — pushed (digest `sha256:d928354…`)
-- [x] Attach ACR to AKS: `az aks update --attach-acr "$ACR_NAME"` — AAD role propagation done
-- [x] Verify image is in registry: `az acr repository list --name "$ACR_NAME" --output table` — `akv-sync-python` listed
+- [ ] Build the Docker image locally: `docker build -t akv-sync-python:local ./akv-sync-python`
+- [ ] Create the Azure Container Registry (`acrakvsync`, Basic SKU, West Europe)
+- [ ] Log in to ACR: `az acr login --name "$ACR_NAME"`
+- [ ] Capture `ACR_LOGIN_SERVER` into a variable
+- [ ] Tag and push the image: `docker push "${ACR_LOGIN_SERVER}/akv-sync-python:latest"`
+- [ ] Attach ACR to AKS: `az aks update --attach-acr "$ACR_NAME"`
+- [ ] Verify image is in registry: `az acr repository list --name "$ACR_NAME" --output table`
 
 ---
 
 ## Step 9 — Deploy to AKS
 
 - [ ] Capture `TENANT_ID` into a variable: `export TENANT_ID=$(az account show --query tenantId -o tsv)`
-- [ ] Create `namespace.yaml` with the `akv-sync` namespace definition
-- [ ] Create `serviceaccount.yaml` with `azure.workload.identity/client-id` and `azure.workload.identity/tenant-id` annotations
-- [ ] Create `cronjob.yaml` with:
-  - [ ] Schedule set to your target RPO (e.g. `*/15 * * * *`)
-  - [ ] `azure.workload.identity/use: "true"` label on the pod template
-  - [ ] `serviceAccountName: akv-sync-sa`
-  - [ ] `SOURCE_VAULT_URL` and `TARGET_VAULT_URL` env vars set correctly
-  - [ ] `concurrencyPolicy: Forbid` to prevent overlapping runs
-- [ ] Apply manifests using `envsubst`:
+- [ ] Apply pre-built Python manifests from `akv-sync-python/k8s/` via `envsubst`:
   - [ ] `envsubst < namespace.yaml | kubectl apply -f -`
   - [ ] `envsubst < serviceaccount.yaml | kubectl apply -f -`
+  - [ ] `envsubst < configmap.yaml | kubectl apply -f -`
   - [ ] `envsubst < cronjob.yaml | kubectl apply -f -`
 - [ ] Verify CronJob created: `kubectl get cronjob -n akv-sync`
 
@@ -165,8 +158,8 @@ All commands are in [README.md](README.md).
 - [ ] Confirm the new value propagated to the target vault
 
 **RBAC boundary check:**
-- [ ] Attempt to write a secret directly to the **source** vault as the managed identity
-  - [ ] Confirm the command returns **403 Forbidden** (the identity must not have write access to source)
+- [ ] Run an in-cluster probe job using the Workload Identity to attempt a write to the **source** vault
+  - [ ] Confirm the job completes with **403 Forbidden** (the identity must not have write access to source)
 
 ---
 

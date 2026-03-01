@@ -17,11 +17,17 @@
 - Root README.md updated: Steps 8–9 now document both **bash** and **Python** build paths and reference the pre-built `akv-sync-python/k8s/` manifests
 - Docker image built (Python variant, `akv-sync-python:local`); ACR created (`acrakvsync.azurecr.io`, Basic SKU); image pushed as `acrakvsync.azurecr.io/akv-sync-python:latest`; ACR attached to AKS — **verified via `az acr repository list`**
 - Documentation updated: `README.md` and `draft-planning.md` now include a "How It Works at Runtime" section explaining the CronJob lifecycle (pod creation → Workload Identity auth → diff & sync → exit), safeguards (`concurrencyPolicy: Forbid`, `activeDeadlineSeconds: 600`, `backoffLimit: 2`), and RPO relationship to the 15-minute default schedule
+- Deployed to AKS (Step 9): applied 4 manifests from `akv-sync-python/k8s/` via `envsubst` — namespace `akv-sync`, ServiceAccount `akv-sync-sa` (Workload Identity annotations verified), ConfigMap `akv-sync-config` (vault URLs and settings verified), CronJob `akv-sync` (schedule `*/15 * * * *`, `SUSPEND=False`) — **all verified via `kubectl get`**
+- **Step 10 — Validation complete:**
+  - Manual sync job (`akv-sync-manual-run`) triggered; pod reached `Completed` immediately; logs showed `Created: 0 | Updated: 0 | Skipped: 3 | Errors: 0` — all 3 secrets already in sync
+  - Target vault confirmed: `api-key`, `db-password`, `storage-account-key` all listed; `db-password = S3cur3P@ssw0rd!` verified
+  - **Rotation test:** `db-password` rotated to `R0tated-P@ssw0rd-2026!` in source vault; second manual sync job (`akv-sync-rotation-test`) triggered; logs showed `Updated: 1 | Skipped: 2 | Errors: 0`; target value confirmed `MATCH ✓`
+  - **RBAC boundary check:** in-cluster probe job (`akv-rbac-boundary-check`) ran with Workload Identity; attempt to `set_secret` on source vault returned **403 Forbidden** — `identity cannot write to source vault. RBAC boundary holds. ✓`
+- **Final sign-off:** all 5 criteria confirmed — source vault has 3 secrets ✓, target vault matches ✓, rotation propagates ✓, managed identity blocked from source writes (403) ✓, CronJob completes without errors ✓
 
 ## Remaining
 
-- **Step 9:** Deploy to AKS — apply k8s manifests (`namespace`, `serviceaccount`, `configmap`/env vars, `cronjob`) via `envsubst`; Python variant has pre-built manifests in `akv-sync-python/k8s/`
-- **Step 10:** Trigger a manual sync job, verify all three secrets appear in the target vault, test a secret rotation end-to-end, and confirm the managed identity returns 403 when attempting to write to the source vault
+- **Cleanup** (optional): delete resource groups `rg-akv-sync-source`, `rg-akv-sync-target`, `rg-akv-sync-aks` when done with the demo
 
 ---
 

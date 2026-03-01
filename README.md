@@ -327,10 +327,9 @@ export SOURCE_VAULT_URL="https://${SOURCE_KV}.vault.azure.net"
 export TARGET_VAULT_URL="https://${TARGET_KV}.vault.azure.net"
 
 # Run using your az login credentials (not Workload Identity)
-# Python example:
-python main.py
-# or Go example:
-# go run .
+bash local-sync-test.sh
+# or invoke the sync script directly:
+# bash akv-sync.sh
 ```
 
 Verify all 3 secrets appear in the target vault:
@@ -581,15 +580,18 @@ kubectl logs -n akv-sync \
   --tail=100
 ```
 
-Expected output should show something like:
+Expected output (Python variant) ends with a summary line:
 
 ```
-INFO  listing secrets from source vault: https://kv-akvsync-source.vault.azure.net
-INFO  found 3 secret(s)
-INFO  [db-password]         → synced (created in target)
-INFO  [api-key]             → synced (created in target)
-INFO  [storage-account-key] → synced (created in target)
-INFO  sync complete. 3 synced, 0 skipped, 0 errors
+2026-03-01 18:24:28  INFO      === Sync complete ===
+2026-03-01 18:24:28  INFO      Created: 3 | Updated: 0 | Skipped: 0 | Errors: 0
+```
+
+On subsequent runs (secrets already in sync):
+
+```
+2026-03-01 18:24:28  INFO      === Sync complete ===
+2026-03-01 18:24:28  INFO      Created: 0 | Updated: 0 | Skipped: 3 | Errors: 0
 ```
 
 ### Confirm secrets exist in the target vault
@@ -617,13 +619,28 @@ az keyvault secret show --vault-name "$TARGET_KV" --name "db-password" --query v
 
 ### Verify RBAC boundaries
 
+The RBAC boundary must be tested **as the managed identity**, not with your personal CLI token. Run a probe job inside the cluster that uses Workload Identity:
+
 ```bash
-# This should FAIL — identity must not write to source
-az keyvault secret set \
-  --vault-name "$SOURCE_KV" \
-  --name "injected-secret" \
-  --value "should-not-work"
-# Expected: (403) Forbidden
+kubectl create job akv-rbac-boundary-check \
+  --from=cronjob/akv-sync \
+  --namespace akv-sync
+```
+
+Override the entrypoint to attempt a write on the source vault. If RBAC is correct the pod completes with:
+
+```
+403 Forbidden confirmed — identity cannot write to source vault. RBAC boundary holds. ✓
+```
+
+If you only have CLI access, you can also confirm the identity has no write role on the source:
+
+```bash
+# Should show only "Key Vault Secrets User" for the source scope — no "Secrets Officer"
+az role assignment list \
+  --assignee "$PRINCIPAL_ID" \
+  --scope "$SOURCE_KV_ID" \
+  --output table
 ```
 
 ---
