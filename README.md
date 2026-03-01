@@ -108,7 +108,14 @@ source env.sh
 az account set --subscription "$SUBSCRIPTION_ID"
 ```
 
-`env.sh` is `.gitignore`d so your real subscription ID and resource names are never committed. Variables that depend on already-deployed resources (`OIDC_ISSUER`, `CLIENT_ID`, `PRINCIPAL_ID`, `SOURCE_KV_ID`, `TARGET_KV_ID`, `ACR_LOGIN_SERVER`, `TENANT_ID`) are populated automatically via `az` queries when you source the file — they silently return empty before those resources exist, and populate correctly once they do.
+`env.sh` is listed in `.gitignore` so your real subscription ID and resource names are never committed to the repository. Verify this before editing the file:
+
+```bash
+git check-ignore -v env.sh
+# Expected output: .gitignore:1:env.sh  env.sh
+```
+
+Variables that depend on already-deployed resources (`OIDC_ISSUER`, `CLIENT_ID`, `PRINCIPAL_ID`, `SOURCE_KV_ID`, `TARGET_KV_ID`, `ACR_LOGIN_SERVER`, `TENANT_ID`) are populated automatically via `az` queries when you source the file — they silently return empty before those resources exist, and populate correctly once they do.
 
 Re-source the file in any new terminal to restore the full environment:
 
@@ -707,6 +714,7 @@ az group delete --name "$AKS_RG"     --yes --no-wait
 - [Azure Key Vault RBAC guide](https://learn.microsoft.com/en-us/azure/key-vault/general/rbac-guide)
 - [Reference sync implementation — mburakunuvar/akv-sync](https://github.com/mburakunuvar/akv-sync)
 - [Multi-region Key Vault sync pattern (dev.to)](https://dev.to/anderson_leite/building-an-azure-key-vault-multi-region-sync-solution-3ca7)
+- [Reference sync implementation — vakaobr/akv-sync](https://github.com/vakaobr/akv-sync)
 
 ---
 
