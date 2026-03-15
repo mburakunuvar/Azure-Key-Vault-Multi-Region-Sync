@@ -2,7 +2,7 @@
 
 ## Approach Overview
 
-### Azure Key Vault Native Backup/Restore ([Security Worlds](https://learn.microsoft.com/en-us/azure/key-vault/general/overview-security-worlds#backup-and-restore-behavior))
+### Azure Key Vault Native Backup/Restore ([security worlds and geographic boundaries](https://learn.microsoft.com/en-us/azure/key-vault/general/overview-security-worlds#backup-and-restore-behavior))
 
 Azure Key Vault objects (keys, secrets, certificates) are backed up as **HSM-encrypted blobs** tied to the **security world** of the source Azure geography — a shared cryptographic boundary across all Key Vaults in that geography (e.g., all of Europe). Because the encryption material never leaves that geography's HSMs, **restore is only possible within the same geography**. Cross-geography DR (e.g., West Europe → East US) is not supported natively.
 
